@@ -3,12 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Random Mute Metronome (Improved)</title>
+    <title>Random Mute Metronome (Multi-Time)</title>
     <style>
         :root {
             --bg-color: #121212;
             --surface-color: #1e1e1e;
             --primary-color: #00f2ff;
+            --accent-color: #ff00ff;
             --muted-color: #444;
             --text-main: #ffffff;
             --text-sub: #888;
@@ -60,29 +61,51 @@
             padding: 20px 0;
         }
 
+        .visualizer-container {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 40px;
+            align-items: center;
+            justify-content: center;
+            min-height: 140px;
+        }
+
         .visualizer {
-            width: 120px;
-            height: 120px;
+            width: 100px;
+            height: 100px;
             border-radius: 50%;
             background-color: transparent;
-            border: 4px solid var(--surface-color);
-            margin-bottom: 40px;
+            border: 3px solid var(--surface-color);
             transition: all 0.1s ease-out;
-            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            box-shadow: 0 0 15px rgba(0,0,0,0.5);
         }
 
         .visualizer.active {
             background-color: var(--primary-color);
             border-color: var(--primary-color);
             box-shadow: 0 0 40px var(--primary-color);
-            transform: scale(1.05);
+            transform: scale(1.1);
+        }
+
+        .visualizer.accent {
+            background-color: var(--accent-color);
+            border-color: var(--accent-color);
+            box-shadow: 0 0 40px var(--accent-color);
+            transform: scale(1.15);
         }
 
         .visualizer.ghost {
             border-color: var(--muted-color);
             background-color: transparent;
             box-shadow: none;
-            transform: scale(0.95);
+            transform: scale(0.9);
+        }
+
+        .beat-label {
+            position: absolute;
+            font-size: 11px;
+            color: var(--text-sub);
+            margin-top: 110px;
         }
 
         .bpm-container {
@@ -126,6 +149,34 @@
             justify-content: space-between;
             font-size: 14px;
             color: var(--text-sub);
+        }
+
+        .time-signature-buttons {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+
+        .time-btn {
+            padding: 12px;
+            background: var(--surface-color);
+            color: var(--text-sub);
+            border: 1px solid var(--surface-color);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+            text-transform: uppercase;
+        }
+
+        .time-btn:active {
+            transform: scale(0.95);
+        }
+
+        .time-btn.active {
+            background: var(--primary-color);
+            color: var(--bg-color);
+            border-color: var(--primary-color);
         }
 
         .range-input {
@@ -204,35 +255,6 @@
             font-size: 12px;
             color: var(--text-sub);
         }
-        
-        footer a {
-            color: var(--primary-color);
-            text-decoration: none;
-            margin-left: 10px;
-            transition: opacity 0.2s;
-        }
-        
-        footer a:hover {
-            opacity: 0.8;
-            text-decoration: underline;
-        }
-
-        .timing-info {
-            position: fixed;
-            top: 10px;
-            right: 10px;
-            font-size: 11px;
-            color: var(--text-sub);
-            background: rgba(0,0,0,0.5);
-            padding: 8px 12px;
-            border-radius: 4px;
-            font-family: 'Courier New', monospace;
-            display: none;
-        }
-
-        .timing-info.show {
-            display: block;
-        }
     </style>
 </head>
 <body>
@@ -242,7 +264,7 @@
     </header>
 
     <main class="app-main">
-        <div id="visualizer" class="visualizer"></div>
+        <div id="visualizerContainer" class="visualizer-container"></div>
 
         <div class="bpm-container">
             <div class="bpm-value" id="bpmDisplay">120</div>
@@ -250,6 +272,18 @@
         </div>
 
         <div class="controls">
+            <div class="control-group">
+                <div class="control-header">
+                    <span>Time Signature</span>
+                </div>
+                <div class="time-signature-buttons">
+                    <button class="time-btn active" data-time="4/4">4/4</button>
+                    <button class="time-btn" data-time="3/4">3/4</button>
+                    <button class="time-btn" data-time="5/4">5/4</button>
+                    <button class="time-btn" data-time="6/8">6/8</button>
+                </div>
+            </div>
+
             <div class="control-group">
                 <div class="control-header">
                     <span>Tempo</span>
@@ -278,10 +312,8 @@
         </div>
     </main>
 
-    <div class="timing-info" id="timingInfo"></div>
-
     <footer>
-        ©2025  <a href="https://note.com/jazzy_begin">buro</a>
+        ©2025 <a href="https://note.com/jazzy_begin">buro</a>
     </footer>
 
     <script>
@@ -300,11 +332,25 @@
         let muteProb = 30; 
         let maxMuteBars = 1;
 
-        const visualizer = document.getElementById('visualizer');
+        // 拍子設定
+        let timeSignature = '4/4';
+        let beatsPerBar = 4;  // 4/4の場合
+
+        // タイム署名の定義
+        const timeSigs = {
+            '4/4': { beats: 4, accentBeats: [0] },
+            '3/4': { beats: 3, accentBeats: [0] },
+            '5/4': { beats: 5, accentBeats: [0] },
+            '6/8': { beats: 6, accentBeats: [0, 3] } // 6/8は二重アクセント
+        };
+
         const playBtn = document.getElementById('playBtn');
         const bpmRange = document.getElementById('bpmRange');
         const probRange = document.getElementById('probRange');
         const durRange = document.getElementById('durRange');
+        const visualizerContainer = document.getElementById('visualizerContainer');
+        const timeButtons = document.querySelectorAll('.time-btn');
+
         const displays = {
             bpm: document.getElementById('bpmDisplay'),
             bpmSmall: document.getElementById('bpmVal'),
@@ -314,15 +360,33 @@
 
         const lookahead = 25.0; 
         const scheduleAheadTime = 0.1;
-
-        // ============ 改善: 高精度タイミング用キュー ============
         const visualQueue = [];
+        const visualizers = {};
+
+        // ビジュアライザーを動的生成
+        function createVisualizers() {
+            visualizerContainer.innerHTML = '';
+            Object.keys(visualizers).forEach(k => delete visualizers[k]);
+
+            for (let i = 0; i < beatsPerBar; i++) {
+                const container = document.createElement('div');
+                container.style.position = 'relative';
+                
+                const viz = document.createElement('div');
+                viz.className = 'visualizer';
+                viz.id = `viz-${i}`;
+                
+                container.appendChild(viz);
+                visualizerContainer.appendChild(container);
+                visualizers[i] = viz;
+            }
+        }
 
         function nextNote() {
             const secondsPerBeat = 60.0 / bpm;
             nextNoteTime += secondsPerBeat;
             currentBeat++;
-            if (currentBeat === 4) {
+            if (currentBeat === beatsPerBar) {
                 currentBeat = 0;
             }
         }
@@ -338,23 +402,26 @@
             gainNode.connect(audioCtx.destination);
 
             const isGhost = isMuted;
+            const config = timeSigs[timeSignature];
+            const isAccent = config.accentBeats.includes(beatNumber);
 
             if (!isMuted) {
-                osc.frequency.value = (beatNumber === 0) ? 1000 : 800;
+                osc.frequency.value = isAccent ? 1000 : 800;
                 gainNode.gain.setValueAtTime(1, time);
                 gainNode.gain.exponentialRampToValueAtTime(0.001, time + 0.05);
                 osc.start(time);
                 osc.stop(time + 0.1);
             }
 
-            // 改善: ビジュアル更新を高精度キューに追加
-            syncVisualWithAudio(time, isGhost);
+            syncVisualWithAudio(time, isGhost, beatNumber, isAccent);
         }
 
-        function syncVisualWithAudio(scheduledTime, isGhost) {
+        function syncVisualWithAudio(scheduledTime, isGhost, beatNumber, isAccent) {
             visualQueue.push({
                 scheduledTime: scheduledTime,
                 isGhost: isGhost,
+                beatNumber: beatNumber,
+                isAccent: isAccent,
                 rafCallback: null
             });
         }
@@ -384,7 +451,6 @@
             }
         }
 
-        // ============ 改善: requestAnimationFrame ベースの高精度ビジュアル処理 ============
         function processVisualQueue() {
             if (!isPlaying) return;
 
@@ -393,21 +459,16 @@
                 const timeDiff = item.scheduledTime - audioCtx.currentTime;
 
                 if (timeDiff <= 0) {
-                    // 時刻に達した：即座に実行
-                    triggerVisual(item.isGhost);
+                    triggerVisual(item.beatNumber, item.isGhost, item.isAccent);
                     visualQueue.splice(i, 1);
                 } else if (timeDiff < 0.05) {
-                    // 50ms以内：requestAnimationFrameで継続監視
                     if (!item.rafCallback) {
-                        item.rafCallback = true; // マーク済み
+                        item.rafCallback = true;
                     }
                 } else {
-                    // 50ms以上先：setTimeoutで次のチェック時刻まで待つ
                     if (!item.rafCallback) {
                         const sleepTime = Math.max(1, (timeDiff - 0.05) * 1000);
-                        setTimeout(() => {
-                            // このタイムアウト後、次の requestAnimationFrame で処理される
-                        }, sleepTime);
+                        setTimeout(() => {}, sleepTime);
                         item.rafCallback = true;
                     }
                 }
@@ -418,18 +479,37 @@
             }
         }
 
-        function triggerVisual(isGhost) {
-            if (!isPlaying) return;
+        function triggerVisual(beatNumber, isGhost, isAccent) {
+            if (!isPlaying || !visualizers[beatNumber]) return;
             
-            visualizer.classList.remove('active', 'ghost');
-            void visualizer.offsetWidth; 
+            const viz = visualizers[beatNumber];
+            viz.classList.remove('active', 'ghost', 'accent');
+            void viz.offsetWidth;
 
             if (isGhost) {
-                visualizer.classList.add('ghost');
+                viz.classList.add('ghost');
+            } else if (isAccent) {
+                viz.classList.add('accent');
             } else {
-                visualizer.classList.add('active');
+                viz.classList.add('active');
             }
         }
+
+        // タイム署名ボタンリスナー
+        timeButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (isPlaying) return; // 再生中は変更不可
+                
+                timeButtons.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                
+                timeSignature = btn.dataset.time;
+                beatsPerBar = timeSigs[timeSignature].beats;
+                
+                createVisualizers();
+                currentBeat = 0;
+            });
+        });
 
         playBtn.addEventListener('click', () => {
             if (isPlaying) {
@@ -438,7 +518,9 @@
                 cancelAnimationFrame(rafID);
                 playBtn.textContent = "START";
                 playBtn.classList.remove('playing');
-                visualizer.classList.remove('active', 'ghost');
+                Object.values(visualizers).forEach(v => {
+                    v.classList.remove('active', 'ghost', 'accent');
+                });
                 visualQueue.length = 0;
             } else {
                 if (audioCtx.state === 'suspended') {
@@ -453,7 +535,7 @@
                 visualQueue.length = 0;
                 
                 scheduler();
-                processVisualQueue(); // 高精度ビジュアル処理開始
+                processVisualQueue();
                 playBtn.textContent = "STOP";
                 playBtn.classList.add('playing');
             }
@@ -475,6 +557,9 @@
             const label = maxMuteBars === 1 ? " Bar" : " Bars";
             displays.dur.textContent = maxMuteBars + label;
         });
+
+        // 初期化
+        createVisualizers();
     </script>
 </body>
 </html>
