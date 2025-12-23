@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Random Mute Metronome (Multi-Time)</title>
+    <title>Random Mute Metronome (Responsive)</title>
     <style>
         :root {
             --bg-color: #121212;
@@ -61,37 +61,52 @@
             padding: 20px 0;
         }
 
+        /* --- 完全レスポンシブ化されたビジュアライザー --- */
         .visualizer-container {
             display: flex;
-            gap: 12px;
+            /* 画面幅いっぱいにならないよう制限しつつ、中央揃え */
+            width: 100%;
+            max-width: 600px; 
+            padding: 0 20px; /* スマホ端の余白 */
             margin-bottom: 40px;
-            align-items: center;
             justify-content: center;
-            min-height: 140px;
+            align-items: center;
+            gap: 12px; /* 円同士の間隔 */
         }
 
         .visualizer {
-            width: 100px;
-            height: 100px;
+            /* フレックスアイテムとして均等に伸縮 */
+            flex: 1; 
+            
+            /* 正円を維持するための魔法のプロパティ */
+            aspect-ratio: 1 / 1;
+            
+            /* 最小・最大サイズの制限 */
+            min-width: 0; /* フレックスボックスでの縮小バグ防止 */
+            max-width: 100px; /* PCで巨大化しすぎないように */
+            
             border-radius: 50%;
             background-color: transparent;
             border: 3px solid var(--surface-color);
             transition: all 0.1s ease-out;
             box-shadow: 0 0 15px rgba(0,0,0,0.5);
+            
+            /* 相対位置（内部要素が必要になった時のため） */
+            position: relative;
         }
 
         .visualizer.active {
             background-color: var(--primary-color);
             border-color: var(--primary-color);
-            box-shadow: 0 0 40px var(--primary-color);
-            transform: scale(1.1);
+            box-shadow: 0 0 30px var(--primary-color);
+            transform: scale(1.05); /* 拡大率を少し控えめに（レイアウト崩れ防止） */
         }
 
         .visualizer.accent {
             background-color: var(--accent-color);
             border-color: var(--accent-color);
-            box-shadow: 0 0 40px var(--accent-color);
-            transform: scale(1.15);
+            box-shadow: 0 0 30px var(--accent-color);
+            transform: scale(1.1);
         }
 
         .visualizer.ghost {
@@ -101,12 +116,7 @@
             transform: scale(0.9);
         }
 
-        .beat-label {
-            position: absolute;
-            font-size: 11px;
-            color: var(--text-sub);
-            margin-top: 110px;
-        }
+        /* ------------------------------------------- */
 
         .bpm-container {
             text-align: center;
@@ -369,15 +379,12 @@
             Object.keys(visualizers).forEach(k => delete visualizers[k]);
 
             for (let i = 0; i < beatsPerBar; i++) {
-                const container = document.createElement('div');
-                container.style.position = 'relative';
-                
+                // コンテナは不要になったため、直接divを追加
                 const viz = document.createElement('div');
                 viz.className = 'visualizer';
                 viz.id = `viz-${i}`;
                 
-                container.appendChild(viz);
-                visualizerContainer.appendChild(container);
+                visualizerContainer.appendChild(viz);
                 visualizers[i] = viz;
             }
         }
