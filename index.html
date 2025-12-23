@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Random Mute Metronome</title>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --surface-color: #1e1e1e;
+            --primary-color: #00f2ff; /* Cyan for visibility */
+            --muted-color: #444;
+            --text-main: #ffffff;
+            --text-sub: #888;
+            --knob-size: 24px;
+        }
+
+        * { box-sizing: border-box; touch-action: manipulation; }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            /* height: 100vh; から min-height に変更してフッター領域を確保 */
+            min-height: 100vh;
+            overflow-x: hidden; /* 横スクロールのみ防止 */
+        }
+
+        /* --- Header --- */
+        .app-header {
+            width: 100%;
+            padding: 20px 0 10px;
+            text-align: center;
+            letter-spacing: 1px;
+        }
+        
+        .app-title {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 400;
+            color: var(--text-sub);
+            text-transform: uppercase;
+        }
+        
+        .app-title span {
+             color: var(--primary-color);
+             font-weight: 600;
+        }
+
+        /* --- Main Container (Center Content) --- */
+        .app-main {
+            flex: 1; /* 上下の余白を埋めて中央配置にする */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            padding: 20px 0; /* 上下に少し余裕を持たせる */
+        }
+
+        /* --- Main Visualizer --- */
+        .visualizer {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background-color: transparent;
+            border: 4px solid var(--surface-color);
+            margin-bottom: 40px;
+            transition: all 0.1s ease-out;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+
+        .visualizer.active {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+            box-shadow: 0 0 40px var(--primary-color);
+            transform: scale(1.05);
+        }
+
+        .visualizer.ghost {
+            /* Muted state visual */
+            border-color: var(--muted-color);
+            background-color: transparent;
+            box-shadow: none;
+            transform: scale(0.95);
+        }
+
+        /* --- BPM Display --- */
+        .bpm-container {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .bpm-value {
+            font-size: 80px;
+            font-weight: 200;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: -2px;
+            line-height: 1;
+        }
+
+        .bpm-label {
+            font-size: 14px;
+            color: var(--text-sub);
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            margin-top: 10px;
+        }
+
+        /* --- Controls --- */
+        .controls {
+            width: 100%;
+            max-width: 400px;
+            padding: 0 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .control-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            color: var(--text-sub);
+        }
+
+        .range-input {
+            width: 100%;
+            -webkit-appearance: none;
+            background: transparent;
+            cursor: pointer;
+        }
+
+        .range-input:focus { outline: none; }
+
+        /* Slider Track */
+        .range-input::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            background: var(--surface-color);
+            border-radius: 2px;
+        }
+
+        /* Slider Thumb */
+        .range-input::-webkit-slider-thumb {
+            height: var(--knob-size);
+            width: var(--knob-size);
+            border-radius: 50%;
+            background: var(--primary-color);
+            -webkit-appearance: none;
+            margin-top: -10px; /* center on track */
+            box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+            transition: transform 0.1s;
+        }
+        
+        .range-input:active::-webkit-slider-thumb {
+            transform: scale(1.2);
+        }
+
+        /* --- Main Button --- */
+        .btn-main {
+            margin-top: 20px;
+            background: var(--surface-color);
+            color: var(--primary-color);
+            border: 1px solid var(--primary-color);
+            font-size: 18px;
+            padding: 18px;
+            border-radius: 50px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-main:active {
+            transform: scale(0.96);
+        }
+
+        .btn-main.playing {
+            background: var(--primary-color);
+            color: var(--bg-color);
+            box-shadow: 0 0 30px rgba(0, 242, 255, 0.4);
+        }
+
+        /* Adjustments for inputs */
+        input[type="range"]::-moz-range-track {
+            width: 100%;
+            height: 4px;
+            background: var(--surface-color);
+            border-radius: 2px;
+        }
+        input[type="range"]::-moz-range-thumb {
+            height: var(--knob-size);
+            width: var(--knob-size);
+            border: none;
+            border-radius: 50%;
+            background: var(--primary-color);
+        }
+
+        /* --- Footer --- */
+        footer {
+            width: 100%;
+            padding: 20px 0 30px;
+            text-align: center;
+            font-size: 12px;
+            color: var(--text-sub);
+        }
+        
+        footer a {
+            color: var(--primary-color);
+            text-decoration: none;
+            margin-left: 10px;
+            transition: opacity 0.2s;
+        }
+        
+        footer a:hover {
+            opacity: 0.8;
+            text-decoration: underline;
+        }
+
+    </style>
+</head>
+<body>
+
+    <header class="app-header">
+        <h1 class="app-title">Random <span>Mute</span> Metronome</h1>
+    </header>
+
+    <main class="app-main">
+        <div id="visualizer" class="visualizer"></div>
+
+        <div class="bpm-container">
+            <div class="bpm-value" id="bpmDisplay">120</div>
+            <div class="bpm-label">BPM</div>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <div class="control-header">
+                    <span>Tempo</span>
+                    <span id="bpmVal">120</span>
+                </div>
+                <input type="range" id="bpmRange" class="range-input" min="40" max="240" value="120">
+            </div>
+
+            <div class="control-group">
+                <div class="control-header">
+                    <span>Mute Probability</span>
+                    <span id="probVal">30%</span>
+                </div>
+                <input type="range" id="probRange" class="range-input" min="0" max="100" value="30">
+            </div>
+
+            <div class="control-group">
+                <div class="control-header">
+                    <span>Max Mute Bars</span>
+                    <span id="durVal">1 Bar</span>
+                </div>
+                <input type="range" id="durRange" class="range-input" min="1" max="4" value="1">
+            </div>
+
+            <button id="playBtn" class="btn-main">START</button>
+        </div>
+    </main>
+
+    <footer>
+        ©2025 buro | <a href="https://note.com/jazzy_begin" target="_blank" rel="noopener noreferrer">Note</a>
+    </footer>
+
+    <script>
+        // --- CORE LOGIC (Web Audio API) ---
+        // (変更なし: 前回のスクリプトと同じ内容です)
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        let isPlaying = false;
+        let currentBeat = 0;       
+        let nextNoteTime = 0.0;    
+        let timerID = null;
+        
+        // Mute Logic State
+        let isMuted = false;
+        let muteRemainingBars = 0;
+        
+        // User Settings
+        let bpm = 120;
+        let muteProb = 30; 
+        let maxMuteBars = 1;
+
+        // UI Elements
+        const visualizer = document.getElementById('visualizer');
+        const playBtn = document.getElementById('playBtn');
+        const bpmRange = document.getElementById('bpmRange');
+        const probRange = document.getElementById('probRange');
+        const durRange = document.getElementById('durRange');
+        const displays = {
+            bpm: document.getElementById('bpmDisplay'),
+            bpmSmall: document.getElementById('bpmVal'),
+            prob: document.getElementById('probVal'),
+            dur: document.getElementById('durVal')
+        };
+
+        // --- SCHEDULER ---
+        const lookahead = 25.0; 
+        const scheduleAheadTime = 0.1; 
+
+        function nextNote() {
+            const secondsPerBeat = 60.0 / bpm;
+            nextNoteTime += secondsPerBeat;
+            currentBeat++;
+            if (currentBeat === 4) {
+                currentBeat = 0;
+            }
+        }
+
+        function scheduleNote(beatNumber, time) {
+            if (beatNumber === 0) {
+                updateMuteState();
+            }
+
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            if (isMuted) {
+                const timeToDraw = (time - audioCtx.currentTime) * 1000;
+                setTimeout(() => {
+                    triggerVisual(true); 
+                }, timeToDraw);
+            } else {
+                osc.frequency.value = (beatNumber === 0) ? 1000 : 800;
+                
+                gainNode.gain.setValueAtTime(1, time);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, time + 0.05);
+
+                osc.start(time);
+                osc.stop(time + 0.1);
+
+                const timeToDraw = (time - audioCtx.currentTime) * 1000;
+                setTimeout(() => {
+                    triggerVisual(false); 
+                }, timeToDraw);
+            }
+        }
+
+        function updateMuteState() {
+            if (muteRemainingBars > 0) {
+                muteRemainingBars--;
+                if (muteRemainingBars === 0) {
+                    isMuted = false;
+                }
+            } else {
+                const roll = Math.random() * 100;
+                if (roll < muteProb) {
+                    isMuted = true;
+                    muteRemainingBars = Math.floor(Math.random() * maxMuteBars) + 1;
+                }
+            }
+        }
+
+        function scheduler() {
+            while (nextNoteTime < audioCtx.currentTime + scheduleAheadTime) {
+                scheduleNote(currentBeat, nextNoteTime);
+                nextNote();
+            }
+            if (isPlaying) {
+                timerID = window.setTimeout(scheduler, lookahead);
+            }
+        }
+
+        // --- UI FEEDBACK ---
+        function triggerVisual(isGhost) {
+            if (!isPlaying) return;
+            
+            visualizer.classList.remove('active', 'ghost');
+            void visualizer.offsetWidth; 
+
+            if (isGhost) {
+                visualizer.classList.add('ghost');
+            } else {
+                visualizer.classList.add('active');
+            }
+        }
+
+        // --- EVENT LISTENERS ---
+        playBtn.addEventListener('click', () => {
+            if (isPlaying) {
+                isPlaying = false;
+                clearTimeout(timerID);
+                playBtn.textContent = "START";
+                playBtn.classList.remove('playing');
+                visualizer.classList.remove('active', 'ghost');
+            } else {
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+                
+                isPlaying = true;
+                currentBeat = 0;
+                isMuted = false;
+                muteRemainingBars = 0;
+                nextNoteTime = audioCtx.currentTime + 0.05;
+                
+                scheduler();
+                playBtn.textContent = "STOP";
+                playBtn.classList.add('playing');
+            }
+        });
+
+        bpmRange.addEventListener('input', (e) => {
+            bpm = parseInt(e.target.value);
+            displays.bpm.textContent = bpm;
+            displays.bpmSmall.textContent = bpm;
+        });
+
+        probRange.addEventListener('input', (e) => {
+            muteProb = parseInt(e.target.value);
+            displays.prob.textContent = muteProb + "%";
+        });
+
+        durRange.addEventListener('input', (e) => {
+            maxMuteBars = parseInt(e.target.value);
+            const label = maxMuteBars === 1 ? " Bar" : " Bars";
+            displays.dur.textContent = maxMuteBars + label;
+        });
+    </script>
+</body>
+</html>
